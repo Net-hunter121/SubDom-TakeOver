@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 # takeover - subdomain takeover finder
-# coded by M'hamed (@m4ll0k) Outaadi 
+# coded by M'hamed (@m4ll0k) Outaadi
 
-import os 
+import os
 import json
-import requests 
+import requests
 import urllib.parse
 import concurrent.futures as thread
 import urllib3
 import getopt
 import sys
 import re
+import ssl
+import smtplib
 
 
 r ='\033[1;31m'
@@ -36,7 +38,7 @@ k_ = {
     'process'    : False,
     'user_agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.36 Safari/537.36',
     'verbose'    : False,
-    'dict_len'   : 0 
+    'dict_len'   : 0
 }
 
 # index/lenght * 100
@@ -91,7 +93,7 @@ services = {
         'Mashery'         : {'error':r'Unrecognized domain <strong>'},
         'Divio'           : {'error':r'Application not responding'},
         'feedpress'       : {'error':r'The feed has not been found.'},
-        'readme'          : {'error':r'Project doesnt exist... yet!'},   
+        'readme'          : {'error':r'Project doesnt exist... yet!'},
         'statuspage'      : {'error':r'You are being <a href=\'https>'},
         'zendesk'         : {'error':r'Help Center Closed'},
         'worksites.net'   : {'error':r'Hello! Sorry, but the webs>'}
@@ -113,6 +115,34 @@ def _info():
 def err(string):
     print(r'  |= [REGEX]: {0}{1}{2}'.format(y_,string,e))
 
+def mail_notify(n_message):
+    try:
+        with open('mail_config.json', 'r') as config:
+            config = json.load(config)
+            s_mail = config['s_mail']
+            s_password = config['s_password']
+            r_mail = config['r_mail']
+
+            host = 'smtp.gmail.com'
+            port = 587
+
+            message = f"""\
+Subject: subdomain takeover notification
+
+{n_message}"""
+
+            context = ssl.create_default_context()
+            with smtplib.SMTP(host, port) as server:
+                try:
+
+                    server.starttls(context=context)
+                    server.login(s_mail, s_password)
+                    server.sendmail(s_mail, r_mail, message)
+                except Exception as ex:
+                    print(ex)
+
+    except FileNotFoundError:
+        pass
 
 def request(domain,proxy,timeout,user_agent):
         url = checkurl(domain)
@@ -196,9 +226,9 @@ def checkurl(url):
         if o.netloc == '':
                 return 'http://' + o.path
         elif o.netloc:
-                return o.scheme + '://' + o.netloc 
+                return o.scheme + '://' + o.netloc
         else:
-                return 'http://' + o.netloc 
+                return 'http://' + o.netloc
 
 def print_(string):
     sys.stdout.write('\033[1K')
@@ -228,6 +258,7 @@ def requester(domain,proxy,timeout,user_agent,output,ok,v):
         code,html = request(domain,proxy,timeout,user_agent)
         service,error = find(code,html,ok)
         if service and error:
+                mail_notify(f"domain: {domain}\nservice: {service}\nsignature: {error}")
                 if output:
                     _output.append((domain,service,error))
                     if v and not k_.get('d_list'):
@@ -280,8 +311,8 @@ def savetxt(path,content,v):
         outtxtfile.close()
     info('Saved at '+path+'..')
 
-def main(): 
-        # -- 
+def main():
+        # --
         if len(sys.argv) < 2:
                 help(1)
         try:
@@ -291,11 +322,11 @@ def main():
         except Exception as e:
                 warn(e,1)
         for o,a in opts:
-                if o == '-d': k_['domain'] = a 
+                if o == '-d': k_['domain'] = a
                 if o == '-t': k_['threads'] = int(a)
-                if o == '-l': k_['d_list'] = a  
-                if o == '-p': k_['proxy'] = a 
-                if o == '-o': k_['output'] = a 
+                if o == '-l': k_['d_list'] = a
+                if o == '-p': k_['proxy'] = a
+                if o == '-o': k_['output'] = a
                 if o == '-T': k_['timeout'] = int(a)
                 if o == '-k': k_['process'] = True
                 if o == '-u': k_['user_agent'] = a
@@ -306,10 +337,10 @@ def main():
             domains = []
             if k_.get('verbose'):
                 info('Starting..')
-            
+
             if k_.get("d_list"):
                 domains.extend(readfile(k_.get("d_list")))
-            else: 
+            else:
                 domains.append(k_.get("domain"))
             k_['domains'] = domains
             k_['dict_len'] = len(domains)
@@ -323,7 +354,7 @@ def main():
                     warn('Output Error: %s extension not supported, only .txt or .json'%k_.get('output').split('.')[1],1)
         elif k_.get('domain') is None and k_.get('d_list') is None:
                 help(1)
-        
+
 if __name__ == '__main__':
     try:
         main()
